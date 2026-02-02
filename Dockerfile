@@ -8,11 +8,19 @@ RUN apk add \
       7zip \
       xorriso \
     && echo "Packages installed"
+RUN rm -f *.iso
 ADD --checksum=$CHECKSUM $URL .
 RUN find . -iname '*.iso' -exec 7z e \{\} boot/grub/grub.cfg \;
+# Decrease timeout to immedeate boot, and set it to autoinstall
+# https://canonical-subiquity.readthedocs-hosted.com/en/latest/reference/autoinstall-reference.html#user-data
+# Ubuntu Autoinstall can load its configuration from cloud-init
 RUN sed -i -Ee 's/timeout=[0-9]+/timeout=0/' -e 's/---/autoinstall/' grub.cfg
 RUN mkdir -p /disk
-RUN find . -iname '*.iso' -exec xorriso -indev \{\} -outdev /disk/\{\} -map grub.cfg /boot/grub/grub.cfg \;
+# Applying report_el_torito trick from https://help.ubuntu.com/community/LiveCDCustomization
+# and add custom grub.cfg
+RUN for ISO in *.iso; do \
+    xorriso -indev ${ISO} -report_el_torito cmd | xargs xorriso -indev ${ISO} -outdev /disk/autoinstall.iso -map grub.cfg /boot/grub/grub.cfg \
+    ; done
 
 ###
 FROM scratch
